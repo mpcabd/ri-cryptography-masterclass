@@ -1,12 +1,20 @@
 import sys
+import string
 
 from sympy import divisors
 from sympy.ntheory import isprime
 
 
-class BlockCipher(object):
-    @staticmethod
-    def _rows_columns(l):
+class Cipher(object):
+    def cipher(self, message, *args, **kwargs):
+        raise NotImplemented('I am an abstract class')
+
+    def decipher(self, message, *args, **kwargs):
+        raise NotImplemented('I am an abstract class')
+
+
+class BlockCipher(Cipher):
+    def _rows_columns(self, l):
         ds = divisors(l)
         if len(ds) % 2 == 1:
             rows = columns = ds[len(ds) // 2]
@@ -14,8 +22,7 @@ class BlockCipher(object):
             rows, columns = ds[len(ds) // 2 - 1: len(ds) // 2 + 1]
         return rows, columns
 
-    @staticmethod
-    def block_cipher(message, print_table=False):
+    def cipher(self, message, print_table=False):
         message = message.title().replace(' ', '')
         l = len(message)
         if l < 4:
@@ -23,7 +30,7 @@ class BlockCipher(object):
         if isprime(l):
             message += ' '
             l += 1
-        rows, columns = BlockCipher._rows_columns(l)
+        rows, columns = self._rows_columns(l)
 
         if print_table:
             for r in range(rows):
@@ -40,12 +47,11 @@ class BlockCipher(object):
 
         return ''.join(ciphered_message)
 
-    @staticmethod
-    def block_decipher(message):
+    def decipher(self, message):
         l = len(message)
         if l < 4 or isprime(l):
             raise ValueError('Invalid ciphered text')
-        rows, columns = BlockCipher._rows_columns(l)
+        rows, columns = self._rows_columns(l)
         deciphered_message = []
         for i in range(l):
             deciphered_message.append(
@@ -53,11 +59,45 @@ class BlockCipher(object):
         return ''.join(deciphered_message)
 
 
-block_cipher = BlockCipher.block_cipher
-block_decipher = BlockCipher.block_decipher
+class MappingCipher(Cipher):
+    def map_character(self, character, *args, **kwargs):
+        raise NotImplemented('I am an abstract class')
 
-__all__ = [
-    'block_cipher',
-    'block_decipher',
-    'BlockCipher'
-]
+    def unmap_character(self, character, *args, **kwargs):
+        raise NotImplemented('I am an abstract class')
+
+    def cipher(self, message, *args, **kwargs):
+        return ''.join(map(self.map_character, message))
+
+    def decipher(self, message, *args, **kwargs):
+        return ''.join(map(self.unmap_character, message))
+
+
+class SlidingScaleCipher(MappingCipher):
+    def __init__(self, rot):
+        self.forward_map = {}
+        self.backward_map = self.forward_map
+        self.rot = rot
+
+        if self.rot > 13:
+            self.rot -= 13
+
+        for i in range(ord('a'), ord('n')):
+            # lower case
+            self.forward_map[chr(i)] = chr(i + self.rot)
+            self.forward_map[chr(i + self.rot)] = chr(i)
+
+            # upper case
+            self.forward_map[chr(i - 32)] = chr(i - 32 + self.rot)
+            self.forward_map[chr(i - 32 + self.rot)] = chr(i - 32)
+
+    def map_character(self, character, *args, **kwargs):
+        return self.forward_map.get(character, character)
+
+    def unmap_character(self, character, *args, **kwargs):
+        return self.backward_map.get(character, character)
+
+
+class HalfReversedAlphabetCipher(SlidingScaleCipher):
+    def __init__(self):
+        super().__init__(13)
