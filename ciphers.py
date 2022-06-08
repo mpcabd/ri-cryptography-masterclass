@@ -76,20 +76,20 @@ class MappingCipher(Cipher):
 class SlidingScaleCipher(MappingCipher):
     def __init__(self, rot):
         self.forward_map = {}
-        self.backward_map = self.forward_map
-        self.rot = rot
+        self.backward_map = {}
+        self.rot = rot % 26
 
-        if self.rot > 13:
-            self.rot -= 13
+        lscale = string.ascii_lowercase * 2  # repeat letters twice
+        uscale = string.ascii_uppercase * 2  # repeat letters twice
 
-        for i in range(ord('a'), ord('n')):
+        for i in range(26):
             # lower case
-            self.forward_map[chr(i)] = chr(i + self.rot)
-            self.forward_map[chr(i + self.rot)] = chr(i)
+            self.forward_map[lscale[i]] = lscale[i + self.rot]
+            self.backward_map[lscale[i + self.rot]] = lscale[i]
 
             # upper case
-            self.forward_map[chr(i - 32)] = chr(i - 32 + self.rot)
-            self.forward_map[chr(i - 32 + self.rot)] = chr(i - 32)
+            self.forward_map[uscale[i]] = uscale[i + self.rot]
+            self.backward_map[uscale[i + self.rot]] = uscale[i]
 
     def map_character(self, character, *args, **kwargs):
         return self.forward_map.get(character, character)
