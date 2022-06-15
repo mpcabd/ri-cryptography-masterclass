@@ -173,25 +173,34 @@ def render_enigma():
     for i in range(3):
         rotors.append(widgets.Dropdown(
             options=['I', 'II', 'III', 'IV', 'V'],
-            value='I',
-            disabled=False,
-            # layout=widgets.Layout(width='350px')
+            layout=widgets.Layout(width='50px')
         ))
-        ring_settings.append(widgets.IntSlider(
+        ring_settings.append(widgets.BoundedIntText(
             min=0,
             max=25,
+            layout=widgets.Layout(width='50px')
         ))
         starting_positions.append(widgets.SelectionSlider(
             options=string.ascii_uppercase,
+            # orientation='vertical',
         ))
-    reflector = widgets.Dropdown(options=['B', 'C'])
-    plugboard_settings = widgets.Text()
+    reflector = widgets.Dropdown(options=['B', 'C'], layout=widgets.Layout(width='50px'))
+    plugboard_settings = widgets.Text(layout=widgets.Layout(width='250px'))
     configure_button = widgets.Button(description='Configure')
     reset_button = widgets.Button(description='Reset')
     message = widgets.Text()
-    keyboard = {c: widgets.Button(description=c) for c in string.ascii_uppercase}
+    keyboard = {c: widgets.Button(description=c, layout=widgets.Layout(width='50px', margin='5px')) for c in string.ascii_uppercase}
     out = widgets.Output()
     pressed_out = widgets.Output()
+    my_vars = {}
+    
+    def handle_configuration(btn):
+        my_vars['machine'] = EnigmaMachine.from_key_sheet(
+            rotors=' '.join(r.value for r in rotors),
+            reflector=reflector.value,
+            ring_settings=tuple(rs.value for rs in ring_settings),
+            plugboard_settings=plugboard_settings.value)
+        my_vars['machine'].set_display(''.join(sp.value for sp in starting_positions))
         
     # initial setup
     def reset(btn):
@@ -209,22 +218,11 @@ def render_enigma():
         message.value = 'NIBL FMYM LLUF WCAS CSSN VHAZ'
         out.clear_output()
         pressed_out.clear_output()
+        handle_configuration(configure_button)
 
     reset_button.on_click(reset)
-    reset(reset_button)
-    
-    my_vars = {}
-    
-    def handle_configuration(btn):
-        my_vars['machine'] = EnigmaMachine.from_key_sheet(
-            rotors=' '.join(r.value for r in rotors),
-            reflector=reflector.value,
-            ring_settings=tuple(rs.value for rs in ring_settings),
-            plugboard_settings=plugboard_settings.value)
-        my_vars['machine'].set_display(''.join(sp.value for sp in starting_positions))
-    
     configure_button.on_click(handle_configuration)
-    handle_configuration(configure_button)
+    reset(reset_button)
     
     def handle_key_press(key):
         c = my_vars['machine'].key_press(key)
@@ -244,29 +242,66 @@ def render_enigma():
         
     keyboard_grid = widgets.VBox((
         widgets.HBox(tuple(keyboard[c] for c in 'QWERTYUIOP')),
-        widgets.HBox(tuple(keyboard[c] for c in 'ASDFGHJKL')),
-        widgets.HBox(tuple(keyboard[c] for c in 'ZXCVBNM')),
+        widgets.HBox(tuple(keyboard[c] for c in 'ASDFGHJKL'), layout=widgets.Layout(margin='0 0 0 20px')),
+        widgets.HBox(tuple(keyboard[c] for c in 'ZXCVBNM'), layout=widgets.Layout(margin='0 0 0 50px')),
     ))
-    play = widgets.Play(
-        value=-1,
-        min=-1,
-        max=len(message.value.replace(' ', '')) - 1,
-        step=1,
-        interval=1000,
-        disabled=False,
-        show_repeat=False,
-    )
-    def handle_play(change):
-        m = message.value.replace(' ', '')
-        handle_key_press(m[play.value])
-    play.observe(handle_play, names='value')
+    # play = widgets.Play(
+    #     value=-1,
+    #     min=-1,
+    #     max=len(message.value.replace(' ', '')) - 1,
+    #     step=1,
+    #     interval=1000,
+    #     disabled=False,
+    #     show_repeat=False,
+    # )
+    # def handle_play(change):
+    #     m = message.value.replace(' ', '')
+    #     handle_key_press(m[play.value])
+    # play.observe(handle_play, names='value')
 
+    rotors_boxes = []
+    for i in range(3):
+        rotors_boxes.append(widgets.VBox((
+                widgets.HTML(f'<b>{nth[i]} rotor settings<b>'),
+                widgets.HBox((
+                    widgets.HTML('<b>Rotor number: </b>', layout=widgets.Layout(width='130px')),
+                    rotors[i],
+                )),
+                widgets.HTML('<i>There were as many as 26 different rotors, maybe even more, but the ones that were used with Engima I were five different rotors, numbered I through V.</i>'),
+                widgets.HBox((
+                    widgets.HTML('<b>Ring setting: </b>', layout=widgets.Layout(width='130px')),
+                    ring_settings[i],
+                    
+                )),
+                widgets.HTML('<i>This is basically an internal rotation of the rotor, it changes how the rotor is wired from the inside, but it is not visible to the users of the machine.</i>'),
+                widgets.HBox((
+                    widgets.HTML('<b>Current position: </b>', layout=widgets.Layout(width='130px')),
+                    starting_positions[i],                    
+                )),
+                widgets.HTML('<i>You can change that before using the machine, and it changes automatically with every keypress as the rotors rotate.</i>'),
+            ),
+            layout=widgets.Layout(width='400px', border='solid 1px lightgray', padding='1em', margin='1em')))
+    
     display(
+        widgets.VBox((
+            widgets.HBox(rotors_boxes),
+            widgets.HBox((
+                widgets.HTML('<b>Reflector: </b>', layout=widgets.Layout(width='130px')),
+                reflector,
+            ), layout=widgets.Layout(width='400px')),
+            widgets.HTML('<i>There were two types of reflectors you could choose from.</i>'),
+            widgets.HBox((
+                widgets.HTML('<b>Plugboard setting: </b>', layout=widgets.Layout(width='130px')),
+                plugboard_settings,
+            ), layout=widgets.Layout(width='600px')),
+            widgets.HTML('<i>You can have up to ten pairs of letters that are plugged together on the plugboard, a letter cannot repeat.</i>'),
+            configure_button,
+            widgets.HTML('<i>Press this button once you are satisfied with the configuration above.</i>'),
+        ), layout=widgets.Layout(width='1320px', border='solid 2px grey', padding='1em', margin='1em')),
         widgets.HBox((
             message,
-            play,
+            # play, plugboard_settings
         )),
-        widgets.HBox(starting_positions),
         keyboard_grid,
         widgets.VBox((
             widgets.Label(value='Pressed so far: '),
@@ -276,4 +311,6 @@ def render_enigma():
             widgets.Label(value='Output: '),
             out,
         )),
+        reset_button,
+        widgets.HTML('<i>This will reset the input and the configuration of the machine.</i>'),
     )
