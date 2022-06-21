@@ -1,7 +1,9 @@
 import caesar
 import ciphers
 import ipywidgets as widgets
+import rsa
 import string
+import time
 
 from enigma.machine import EnigmaMachine
 from IPython.display import display, Markdown, SVG
@@ -201,8 +203,7 @@ def render_enigma():
             ring_settings=tuple(rs.value for rs in ring_settings),
             plugboard_settings=plugboard_settings.value)
         my_vars['machine'].set_display(''.join(sp.value for sp in starting_positions))
-        
-    # initial setup
+
     def reset(btn):
         rotors[0].value = 'II'
         rotors[1].value = 'IV'
@@ -245,19 +246,6 @@ def render_enigma():
         widgets.HBox(tuple(keyboard[c] for c in 'ASDFGHJKL'), layout=widgets.Layout(margin='0 0 0 20px')),
         widgets.HBox(tuple(keyboard[c] for c in 'ZXCVBNM'), layout=widgets.Layout(margin='0 0 0 50px')),
     ))
-    # play = widgets.Play(
-    #     value=-1,
-    #     min=-1,
-    #     max=len(message.value.replace(' ', '')) - 1,
-    #     step=1,
-    #     interval=1000,
-    #     disabled=False,
-    #     show_repeat=False,
-    # )
-    # def handle_play(change):
-    #     m = message.value.replace(' ', '')
-    #     handle_key_press(m[play.value])
-    # play.observe(handle_play, names='value')
 
     rotors_boxes = []
     for i in range(3):
@@ -314,3 +302,137 @@ def render_enigma():
         reset_button,
         widgets.HTML('<i>This will reset the input and the configuration of the machine.</i>'),
     )
+
+
+class RSAHelper():
+    @classmethod
+    def _static_init(cls):
+        data = ((0, 0),
+                (512, 1.00E+04),
+                (1024, 1.00E+12),
+                (1500, 1.00E+20),
+                (3000, 1.00E+30),
+                (5120, 1.00E+36),
+                (20480, 1.00E+78))
+        cls.data = data
+        cls.slopes = [(data[i][1] - data[i - 1][1]) / (data[i][0] - data[i - 1][0]) for i in range(1, len(data))]
+        cls.slopes.append(cls.slopes[-1] * 1.00E+32)
+
+    @classmethod
+    def _mips(cls, bits):
+        slope = None
+        lbits = None
+        lmips = None
+        for i in range(len(cls.data) - 1):
+            if cls.data[i][0] <= bits <= cls.data[i + 1][0]:
+                slope = cls.slopes[i]
+                lbits = cls.data[i][0]
+                lmips = cls.data[i][1]
+
+        if slope is None:
+            slope = cls.slopes[-1]
+            lbits = cls.data[-1][0]
+            lmips = cls.data[-1][1]
+
+        return lmips + slope * (bits - lbits)
+
+    @staticmethod
+    def _mips_print(bits):
+        print('%0E' % mips(bits))
+        
+    @staticmethod
+    def _encode(message):
+        return message.encode('utf-8')
+    
+    @staticmethod
+    def _decode(message):
+        return message.decode('utf-8')
+    
+    @staticmethod
+    def print_binary(message, line_length=8):
+        if not message:
+            return
+        if isinstance(message, str):
+            message = RSAHelper._encode(message)
+        for i, byte in enumerate(message):
+            if i != 0:
+                if i % line_length == 0:
+                    print('')
+                else:
+                    print(' ', end='')
+            print('{:08b}'.format(byte), end='')
+        print('')
+        
+    def __init__(self, bit_length):
+        self.bit_length = bit_length
+        self.mips = RSAHelper._mips(bit_length)
+        self.public_key, self.private_key = rsa.newkeys(bit_length)
+        
+    def encrypt(self, message):
+        return rsa.encrypt(RSAHelper._encode(message), self.public_key)
+    
+    def decrypt(self, message):
+        return RSAHelper._decode(rsa.decrypt(message, self.private_key))
+
+RSAHelper._static_init()
+
+def render_rsa(initial_message='Masterclass'):
+    message = widgets.Text(value=initial_message, continuous_update=True, layout=widgets.Layout(width='800px'))
+    bit_length_input = widgets.IntSlider(min=256, max=4096, value=512, step=32, continuous_update=False)
+    my_vars = {}
+    
+    def _handle_rsa(message):
+        bit_length = bit_length_input.value
+        rsa_helper = my_vars['rsa_helper']
+        d = my_vars['rsa_helper_d']
+        print(f'RSA with {bit_length} bits key')
+        print(f'It took this computer {d:.0f} nanoseconds ({d * 1e-9:.9f} seconds) to generate keys of this length')
+        print('Public key:')
+        print(f'\te = {rsa_helper.public_key.e:,d}')
+        print(f'\tn = {rsa_helper.public_key.n:,d}')
+        print('')
+        print('Private key:')
+        print(f'\te = {rsa_helper.private_key.e:,d}')
+        print(f'\td = {rsa_helper.private_key.n:,d}')
+        print(f'\tn = {rsa_helper.private_key.n:,d}')
+        print(f'\tp = {rsa_helper.private_key.p:,d}')
+        print(f'\tq = {rsa_helper.private_key.q:,d}')
+        print('')
+        print(f'Original message: {message}\n')
+        print(f'Original message in binary: ({len(rsa_helper._encode(message)):,d} bytes)')
+        rsa_helper.print_binary(message)
+        print('')
+        encrypted_message = rsa_helper.encrypt(message)
+        print(f'Encrypted message in binary: ({len(encrypted_message):,d} bytes)')
+        rsa_helper.print_binary(encrypted_message)
+        start = time.perf_counter_ns()
+        decrypted_message = rsa_helper.decrypt(encrypted_message)
+        d = time.perf_counter_ns() - start
+        print('')
+        print(f'Decrypted message: {decrypted_message}')
+        print('\n')
+        print(f'It took this computer {d:.0f} nanoseconds ({d * 1e-9:.9f} seconds) to decrypt this message')
+        print(f'It would take a standard computer running 1 million operations per second {int(rsa_helper.mips):,d} years to crack this encryption.')
+        
+    out = widgets.interactive_output(_handle_rsa, {'message': message})
+
+    def handle_bit_length(change=None):
+        start = time.perf_counter_ns()
+        my_vars['rsa_helper'] = RSAHelper(bit_length_input.value)
+        d = time.perf_counter_ns() - start
+        my_vars['rsa_helper_d'] = d
+        out.clear_output()
+        with out:
+            _handle_rsa(message.value)
+        
+    bit_length_input.observe(handle_bit_length, names='value')
+    handle_bit_length()
+    
+    
+    display(widgets.VBox((
+        widgets.Label(value='Enter your message below:'),
+        message,
+        widgets.Label(value='Choose your key bit length:'),
+        bit_length_input,
+        out
+    )))
