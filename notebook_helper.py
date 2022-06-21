@@ -22,14 +22,6 @@ def _handle_scale_cipher(message, rot, print_mapping):
     if print_mapping:
         display(SVG(data=caesar.caesar(rot)))
     _handle_cipher(c, message)
-        
-def _handle_random_cipher(message, print_mapping):
-    c = ciphers.RandomMappingCipher(print_mapping=print_mapping)
-    _handle_cipher(c, message)
-
-def _handle_emoji_cipher(message, print_mapping):
-    c = ciphers.RandomMappingEmojiCipher(print_mapping=print_mapping)
-    _handle_cipher(c, message)
 
 def render_block_cipher(initial_message='Masterclass'):
     message = widgets.Text(value=initial_message, continuous_update=True)
@@ -76,12 +68,19 @@ def render_random_cipher(initial_message='Masterclass'):
         indent=False
     )
     randomise = widgets.Button(description='Randomise')
-    out = widgets.interactive_output(_handle_random_cipher, {'message': message, 'print_mapping': print_mapping})
+    my_vars = {}
+    def handle_change(message, print_mapping):
+        c = my_vars['c']
+        c.print_mapping = print_mapping
+        _handle_cipher(c, message)
+    out = widgets.interactive_output(handle_change, {'message': message, 'print_mapping': print_mapping})
     def refresh(btn=None):
         out.clear_output()
+        my_vars['c'] = ciphers.RandomMappingCipher(print_mapping=print_mapping.value)
         with out:
-            _handle_random_cipher(message.value, print_mapping.value)
+            handle_change(message.value, print_mapping.value)
     randomise.on_click(refresh)
+    refresh()
     
     display(widgets.VBox((
         widgets.Label(value='Enter your message below:'),
@@ -100,12 +99,19 @@ def render_emoji_cipher(initial_message='Masterclass'):
         indent=False
     )
     randomise = widgets.Button(description='Randomise')
-    out = widgets.interactive_output(_handle_emoji_cipher, {'message': message, 'print_mapping': print_mapping})
+    my_vars = {}
+    def handle_change(message, print_mapping):
+        c = my_vars['c']
+        c.print_mapping = print_mapping
+        _handle_cipher(c, message)
+    out = widgets.interactive_output(handle_change, {'message': message, 'print_mapping': print_mapping})
     def refresh(btn=None):
         out.clear_output()
+        my_vars['c'] = ciphers.RandomMappingEmojiCipher(print_mapping=print_mapping.value)
         with out:
-            _handle_emoji_cipher(message.value, print_mapping.value)
+            handle_change(message.value, print_mapping.value)
     randomise.on_click(refresh)
+    refresh()
     
     display(widgets.VBox((
         widgets.Label(value='Enter your message below:'),
